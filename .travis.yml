@@ -1,0 +1,91 @@
+language: php
+
+cache:
+  directories:
+    - $HOME/.composer/cache
+    - vendor
+
+services:
+  - mysql
+
+env:
+  global:
+    - COMPOSER_ARGS="--no-interaction"
+
+matrix:
+  fast_finish: true
+  include:
+    - php: 7.1
+      env:
+        - DEPS=lowest
+    - php: 7.1
+      env:
+        - DEPS=locked
+        - TEST_COVERAGE=true
+    - php: 7.1
+      env:
+        - DEPS=latest
+    - php: 7.1
+      env:
+        - DEPS=dev
+    - php: 7.2
+      env:
+        - DEPS=lowest
+    - php: 7.2
+      env:
+        - DEPS=locked
+        - CS_CHECK=true
+    - php: 7.2
+      env:
+        - DEPS=latest
+    - php: 7.2
+      env:
+        - DEPS=dev
+    - php: 7.3
+      env:
+        - DEPS=lowest
+    - php: 7.3
+      env:
+        - DEPS=locked
+    - php: 7.3
+      env:
+        - DEPS=latest
+    - php: 7.3
+      env:
+        - DEPS=dev
+    - php: 7.4snapshot
+      env:
+        - DEPS=lowest
+    - php: 7.4snapshot
+      env:
+        - DEPS=locked
+    - php: 7.4snapshot
+      env:
+        - DEPS=latest
+  allow_failures:
+    - php: 7.4snapshot
+
+before_install:
+  - mysql -e 'CREATE DATABASE `database`;'
+
+install:
+  - if [[ $DEPS == 'dev' ]]; then travis_retry composer config minimum-stability dev ; fi
+  - travis_retry composer install $COMPOSER_ARGS
+  - if [[ $DEPS == 'latest' ]]; then travis_retry composer update $COMPOSER_ARGS ; fi
+  - if [[ $DEPS == 'lowest' ]]; then travis_retry composer update --prefer-lowest --prefer-stable $COMPOSER_ARGS ; fi
+  - composer show
+
+before_script:
+  - rm -Rf .travis/cache
+  - cp .travis/config/application.config.php config/application.config.php
+
+script:
+  - if [[ $TEST_COVERAGE == 'true' ]]; then composer test-coverage ; else composer test ; fi
+  - if [[ $TEST_COVERAGE == 'true' ]]; then php build/coverage-checker.php build/clover.xml 70 ; fi
+  - if [[ $CS_CHECK == 'true' ]]; then composer cs-check ; fi
+  - cat .travis/run-cli.sh | xargs -L 1 php
+
+after_script:
+  - rm -Rf config/application.config.php
+  - if [[ $TEST_COVERAGE == 'true' ]]; then wget https://scrutinizer-ci.com/ocular.phar; fi
+  - if [[ $TEST_COVERAGE == 'true' ]]; then php ocular.phar code-coverage:upload --format=php-clover ./build/clover.xml; fi
